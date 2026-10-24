@@ -171,7 +171,8 @@ final class CoachPoseCamera: NSObject, ObservableObject, AVCaptureVideoDataOutpu
         let mag = hypot(v1.dx, v1.dy) * hypot(v2.dx, v2.dy)
         guard mag > 0.000001 else { return nil }
         let cosAngle = (v1.dx*v2.dx + v1.dy*v2.dy) / mag
-        return acos(max(-1,min(1,cosAngle))) * 180 / .pi
+        let clamped = max(-1.0, min(1.0, Double(cosAngle)))
+return acos(clamped) * 180.0 / Double.pi
     }
 }
 
