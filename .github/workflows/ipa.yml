@@ -1,0 +1,63 @@
+
+name: Build free Fourth Down Coach V4 IPA
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  compile-native-ios:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate files and Swift syntax
+        shell: bash
+        run: |
+          python3 tests/check_project.py
+          swiftc -frontend -parse ios/*.swift
+          swiftc ios/AccountabilityRules.swift tests/rules-smoke.swift -o "$RUNNER_TEMP/fdc-rules"
+          "$RUNNER_TEMP/fdc-rules"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Compile iOS app without signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -project FourthDownCoach.xcodeproj \
+            -scheme FourthDownCoach -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/FDCBuild" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/fdc-v4-build.log"
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/FDCBuild/Build/Products/Release-iphoneos/FourthDownCoach.app"
+          test -d "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry FourthDownCoach-V4-UNSIGNED.ipa Payload
+
+      - name: Upload build log if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FourthDownCoach-V4-BUILD-LOG
+          path: ${{ runner.temp }}/fdc-v4-build.log
+          if-no-files-found: ignore
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: FourthDownCoach-V4-unsigned-IPA
+          path: FourthDownCoach-V4-UNSIGNED.ipa
+          if-no-files-found: error
